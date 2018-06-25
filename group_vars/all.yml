@@ -1,0 +1,48 @@
+float_ip_nic: "enp0s8:0"
+float_ip_addr: "192.168.85.100"
+float_ip_mask: "24"
+iqn: "2018-06.com.example"
+cluster_name: "iscsicluster"
+
+prereq_templates:
+  - { src: "etc/default/iscsitarget.j2" }
+
+debian_packages:
+  - { name: "sudo" }
+  - { name: "zip" }
+  - { name: "unzip" }
+  - { name: "mc" }
+  - { name: "screen" }
+  - { name: "iftop" }
+  - { name: "curl" }
+  - { name: "ntp" }
+  - { name: "rng-tools" }
+  - { name: "pacemaker" }
+  - { name: "iscsitarget" }
+
+drbd_disks:
+  - device: /dev/drbd0
+    disk: /dev/sdb
+    partitions: 1
+    resource: r0
+    state: present
+    use_partition: /dev/sdb1
+
+drbd_group: nodes
+drbd_network_shared_secret: wXE8MqVa
+
+# Debian9/Ubuntu have included drbd support.
+drbd_deb_packages: 
+  - drbd-utils
+  - drbd-dkms
+
+# Toggle
+drbd_use_heartbeat: false
+drbd_use_parted: true
+drbd_unicast_mode: false
+drbd_unicast_port: 694
+
+cluster_config_cmd:
+  - "crm configure property is-managed-default=false"
+  - "crm configure load replace /etc/corosync/production.cib"
+  - "crm resource refresh"

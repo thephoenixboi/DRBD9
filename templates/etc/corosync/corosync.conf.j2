@@ -1,0 +1,34 @@
+# {{ ansible_managed }}
+totem {
+  version: 2
+  cluster_name: "{{ cluster_name }}"
+  transport: udpu
+  interface {
+    ringnumber: 0
+    bindnetaddr: {{ hostvars[inventory_hostname]['ansible_' + drbd_interface]['ipv4']['address'] }}
+    broadcast: yes
+    mcastport: 5405
+  }
+}
+
+quorum {
+  provider: corosync_votequorum
+  expected_votes: 1
+}
+
+nodelist {
+{% for host in groups[drbd_group] %}
+  node {
+    ring0_addr: {{ hostvars[host]['ansible_' + drbd_interface]['ipv4']['address'] }}
+    name: {{ hostvars[host]['inventory_hostname_short'] }}
+    nodeid: {{ hostvars[host]['drbd_node-id'] }}
+  }
+{% endfor %}
+}
+
+logging {
+  to_logfile: yes
+  logfile: /var/log/corosync/corosync.log
+  to_syslog: yes
+  timestamp: on
+}

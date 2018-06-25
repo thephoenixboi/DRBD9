@@ -1,0 +1,11 @@
+---
+- name: Add DRBD9 repository
+  apt_repository:
+    repo: 'ppa:linbit/linbit-drbd9-stack'
+
+- name: debian | Installing DRBD packages
+  apt:
+    name: "{{ item }}"
+    state: present
+  become: true
+  with_items: "{{ drbd_deb_packages }}"

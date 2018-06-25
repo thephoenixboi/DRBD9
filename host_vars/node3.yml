@@ -1,0 +1,16 @@
+---
+ansible_host: 192.168.85.203
+ansible_user: root
+ansible_pipelining: true
+
+drbd_node-id: 3
+drbd_interface: enp0s8
+drbd_disks:
+  - device: /dev/drbd0
+    disk: /dev/sdc
+    filesystem: ext4
+    partitions: 1
+    mountpoint: /opt/nfs
+    resource: r0
+    state: present
+    use_partition: /dev/sdc1

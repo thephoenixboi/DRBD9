@@ -1,0 +1,88 @@
+---
+- hosts: nodes
+  gather_facts: False
+  pre_tasks:
+    - raw: test -e /usr/bin/python || (apt -y update && apt install -y python-minimal)
+    - setup: # aka gather_facts
+      tags: [setup]
+
+    - name: Install base packages
+      apt:
+        name: "{{ item.name }}"
+        state: "{{ item.state | default('present') }}"
+      with_items: "{{ debian_packages | default([]) }}"
+
+    - name: Provision prereq templates
+      template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest | default('/' ~ item.src[:-3]) }}"
+        owner: "{{ item.owner | default('root') }}"
+        group: "{{ item.group | default('root') }}"
+        mode: "{{ item.mode | default('0644') }}"
+      with_items: "{{ prereq_templates | default([]) }}"
+
+    - name: Add DRBD9 repository
+      apt_repository:
+        repo: 'ppa:linbit/linbit-drbd9-stack'
+
+  tasks:
+    - name: Generate corosync authkey
+      command: corosync-keygen
+      args:
+        creates: /etc/corosync/authkey
+      when: inventory_hostname == groups[drbd_group][0]
+
+    - name: Read corosync authkey
+      slurp:
+        src: /etc/corosync/authkey
+      register: authkey
+      when: inventory_hostname == groups[drbd_group][0]
+
+    - name: Write corosync authkey
+      shell: "echo {{ hostvars[groups[drbd_group][0]].authkey['content'] }} | base64 -d > /etc/corosync/authkey"
+      args:
+        creates: /etc/corosync/authkey
+      when: inventory_hostname != groups[drbd_group][0]
+
+    - name: Corosync configuration file
+      template:
+        src: "etc/corosync/corosync.conf.j2"
+        dest: "/etc/corosync/corosync.conf"
+      notify: Restart services
+
+    - name: CRM production CIB
+      template:
+        src: "etc/corosync/production.cib.j2"
+        dest: "/etc/corosync/production.cib"
+      notify: Reload cluster config
+
+    - name: Start services
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+        daemon_reload: yes
+      with_items:
+        - corosync
+        - pacemaker
+        - iscsitarget
+
+  handlers:
+    - name: Restart services
+      systemd:
+        name: "{{ item }}"
+        state: restarted
+        enabled: yes
+        daemon_reload: yes
+      with_items:
+        - corosync
+        - pacemaker
+        - iscsitarget
+        
+    - name: Reload cluster config
+      command: "{{ item }}"
+      with_items: "{{ cluster_config_cmd | default([]) }}"
+      when: inventory_hostname == groups[drbd_group][0]
+
+  roles:
+    - drbd

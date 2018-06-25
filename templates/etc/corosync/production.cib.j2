@@ -1,0 +1,28 @@
+primitive p_float_ip IPaddr2 \
+	params ip="{{ float_ip_addr }}" cidr_netmask="{{ float_ip_mask }}" nic="{{ float_ip_nic }}" \
+	op monitor interval=10s \
+	meta target-role=Started
+{% for disk in drbd_disks %}
+primitive p_drbd_{{ disk['resource'] }} ocf:linbit:drbd \
+	params drbd_resource={{ disk['resource'] }} \
+	op monitor interval=29s role=Master \
+	op monitor interval=31s role=Slave
+primitive p_ietd_{{ disk['resource'] }} iSCSITarget \
+	params implementation=iet \
+	params iqn="iqn.{{ iqn }}:{{ disk['resource'] }}" \
+	op monitor interval=5s \
+	meta target-role=Started
+primitive p_ietu_{{ disk['resource'] }} iSCSILogicalUnit \
+	params target_iqn="iqn.{{ iqn }}:{{ disk['resource'] }}" lun={{ loop.index }} path="/dev/drbd/by-res/{{ disk['resource'] }}" additional_parameters="type=blockio" \
+	meta target-role=Started
+ms ms_drbd_{{ disk['resource'] }} p_drbd_{{ disk['resource'] }} \
+	meta master-max=1 master-node-max=1 clone-max=3 clone-node-max=1 notify=true target-role=Started
+order order_{{ disk['resource'] }} inf: ms_drbd_{{ disk['resource'] }}:promote p_ietd_{{ disk['resource'] }} p_ietu_{{ disk['resource'] }} p_float_ip
+colocation co_{{ disk['resource'] }} inf:  ms_drbd_{{ disk['resource'] }}:Master p_ietd_{{ disk['resource'] }} p_ietu_{{ disk['resource'] }} p_float_ip
+{% endfor %}
+property cib-bootstrap-options: \
+	have-watchdog=false \
+	dc-version=1.1.14-70404b0 \
+	cluster-infrastructure=corosync \
+	cluster-name=iscsicluster \
+	stonith-enabled=false
